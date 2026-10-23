@@ -20,25 +20,25 @@
   }
   @media (min-width: 900px) {
     .container { flex-direction: row; }
-    #factoryCanvas { flex: 1.5; }
-    #battleCanvas  { flex: 1; }
+    #factoryCanvas { flex: 1.6; }
+    #battleCanvas  { flex: 0.9; }
   }
   canvas {
     display: block;
     background: #1a1520;
     width: 100%;
   }
-  #factoryCanvas { flex: 1.2; min-height: 50vh; }
-  #battleCanvas  { flex: 0.8; min-height: 30vh; border-top: 2px solid #3a2a1a; }
+  #factoryCanvas { flex: 1.2; min-height: 55vh; }
+  #battleCanvas  { flex: 0.8; min-height: 28vh; border-top: 2px solid #3a2a1a; }
   .ui {
     position: absolute;
     top: 8px;
     left: 8px;
-    background: rgba(10, 8, 6, 0.9);
+    background: rgba(10, 8, 6, 0.92);
     border: 1px solid #5a4a3a;
     padding: 10px 14px;
     border-radius: 6px;
-    min-width: 200px;
+    min-width: 210px;
     font-size: 13px;
     line-height: 1.5;
     z-index: 10;
@@ -63,6 +63,7 @@
   button:hover { background: #3a3228; }
   button.active { background: #5a4a2a; border-color: #d4a574; }
   .wave-info { margin-top: 8px; color: #c07050; font-weight: bold; }
+  .hint { font-size: 11px; color: #a09070; margin-top: 6px; }
 </style>
 </head>
 <body>
@@ -81,12 +82,13 @@
     Oleada: <span id="wave">1</span> &nbsp; HP: <span id="enemyHp">10</span>
   </div>
   <div class="buttons">
-    <button id="btnIron" onclick="selectPlace('iron')">Extractor Hierro (15 oro)</button>
-    <button id="btnMana" onclick="selectPlace('mana')">Extractor Maná (15 oro)</button>
-    <button id="btnForge" onclick="selectPlace('forge')">Nodo de Forja (40 oro)</button>
-    <button id="btnPath" onclick="selectPlace('path')">Camino (5 oro)</button>
+    <button id="btnIron" onclick="selectPlace('iron')">Extractor Hierro (15)</button>
+    <button id="btnMana" onclick="selectPlace('mana')">Extractor Maná (15)</button>
+    <button id="btnForge" onclick="selectPlace('forge')">Forja (40)</button>
+    <button id="btnPath" onclick="selectPlace('path')">Camino (5)</button>
     <button onclick="selectPlace(null)">Cancelar</button>
   </div>
+  <div class="hint">Selecciona un botón y haz clic en la rejilla.</div>
 </div>
 
 <script>
@@ -100,18 +102,26 @@ const state = {
   enemyMaxHp: 10,
   selectedPlace: null,
   grid: Array.from({ length: 8 }, () => Array(8).fill(null)),
-  // Recursos en movimiento: { type, gx, gy, progress, nextGx, nextGy, path }
   moving: [],
-  // Buffers locales en forjas: { gx, gy, iron, mana }
   forgeBuffers: new Map(),
 };
 
-const TILE_W = 64;
-const TILE_H = 32;
+const TILE_W = 72;
+const TILE_H = 36;
 const GRID = 8;
-const ORIGIN_X = 280;
-const ORIGIN_Y = 40;
+let ORIGIN_X = 300;
+let ORIGIN_Y = 60;
 const DIRS = [[0,1],[1,0],[0,-1],[-1,0]];
+
+function updateOrigin() {
+  const w = factoryCanvas.width;
+  const h = factoryCanvas.height;
+  // Centrar la rejilla isométrica en el canvas
+  const gridPixelW = GRID * (TILE_W / 2);
+  const gridPixelH = GRID * (TILE_H / 2);
+  ORIGIN_X = (w - gridPixelW) / 2 + (GRID * TILE_W / 4);
+  ORIGIN_Y = (h - gridPixelH) / 2 - 20;
+}
 
 function gridToScreen(gx, gy) {
   return {
@@ -132,7 +142,6 @@ function isValid(x, y) {
   return x >= 0 && x < GRID && y >= 0 && y < GRID;
 }
 
-// BFS simple para encontrar camino hasta la forja más cercana
 function findPathToForge(startX, startY) {
   const queue = [[startX, startY, []]];
   const visited = new Set([`${startX},${startY}`]);
@@ -164,7 +173,6 @@ function simulationTick() {
   if (now - lastTick < TICK_MS) return;
   lastTick = now;
 
-  // Extractores generan recursos si hay camino a una forja
   for (let y = 0; y < GRID; y++) {
     for (let x = 0; x < GRID; x++) {
       const node = state.grid[y][x];
@@ -173,19 +181,17 @@ function simulationTick() {
       const path = findPathToForge(x, y);
       if (!path || path.length < 2) continue;
 
-      // Spawn recurso que empieza a moverse
       state.moving.push({
         type: node.type,
         gx: x,
         gy: y,
         progress: 0,
-        path: path.slice(1), // resto del camino
+        path: path.slice(1),
         pathIndex: 0
       });
     }
   }
 
-  // Mover recursos (un paso por tick)
   for (let i = state.moving.length - 1; i >= 0; i--) {
     const item = state.moving[i];
     item.progress += 1;
@@ -198,7 +204,6 @@ function simulationTick() {
         item.gy = ny;
         item.pathIndex++;
       } else {
-        // Llegó a la forja
         const [fx, fy] = item.path[item.path.length - 1];
         const key = `${fx},${fy}`;
         if (!state.forgeBuffers.has(key)) {
@@ -208,7 +213,6 @@ function simulationTick() {
         if (item.type === 'iron') buf.iron++;
         if (item.type === 'mana') buf.mana++;
 
-        // Procesar si hay suficientes materiales
         if (buf.iron >= 2 && buf.mana >= 1) {
           buf.iron -= 2;
           buf.mana -= 1;
@@ -220,7 +224,6 @@ function simulationTick() {
     }
   }
 
-  // Daño con espadas
   const dmgPerSword = 4;
   while (state.swords > 0 && state.enemyHp > 0) {
     state.swords--;
@@ -248,6 +251,7 @@ function resizeCanvases() {
   factoryCanvas.height = factoryCanvas.clientHeight;
   battleCanvas.width   = battleCanvas.clientWidth;
   battleCanvas.height  = battleCanvas.clientHeight;
+  updateOrigin();
 }
 window.addEventListener('resize', resizeCanvases);
 resizeCanvases();
@@ -261,7 +265,7 @@ function drawDiamond(ctx, x, y, color) {
   ctx.closePath();
   ctx.fillStyle = color;
   ctx.fill();
-  ctx.strokeStyle = '#3a2a1a';
+  ctx.strokeStyle = '#4a3a2a';
   ctx.lineWidth = 1;
   ctx.stroke();
 }
@@ -269,27 +273,25 @@ function drawDiamond(ctx, x, y, color) {
 function renderFactory() {
   fCtx.clearRect(0, 0, factoryCanvas.width, factoryCanvas.height);
 
-  // Tiles
   for (let gy = GRID - 1; gy >= 0; gy--) {
     for (let gx = 0; gx < GRID; gx++) {
       const { x, y } = gridToScreen(gx, gy);
       const node = state.grid[gy][gx];
       let color = '#2a2218';
-      if (node?.type === 'iron')  color = '#6a5a3a';
-      if (node?.type === 'mana')  color = '#3a4a6a';
-      if (node?.type === 'forge') color = '#6a3a2a';
-      if (node?.type === 'path')  color = '#4a3a5a';
+      if (node?.type === 'iron')  color = '#7a6a4a';
+      if (node?.type === 'mana')  color = '#4a5a7a';
+      if (node?.type === 'forge') color = '#7a4a3a';
+      if (node?.type === 'path')  color = '#5a4a6a';
       drawDiamond(fCtx, x, y, color);
     }
   }
 
-  // Recursos en movimiento (partículas)
   for (const item of state.moving) {
     const { x, y } = gridToScreen(item.gx, item.gy);
-    const color = item.type === 'iron' ? '#c0a060' : '#60a0c0';
+    const color = item.type === 'iron' ? '#e0c070' : '#70c0e0';
     fCtx.fillStyle = color;
     fCtx.beginPath();
-    fCtx.arc(x, y + 8, 5, 0, Math.PI * 2);
+    fCtx.arc(x, y + 10, 6, 0, Math.PI * 2);
     fCtx.fill();
   }
 }
@@ -302,52 +304,53 @@ function renderBattle() {
   bCtx.fillRect(0, 0, w, h);
 
   const pathY = h * 0.55;
-  bCtx.strokeStyle = '#5a4a3a';
-  bCtx.lineWidth = 14;
+  bCtx.strokeStyle = '#6a5a4a';
+  bCtx.lineWidth = 18;
   bCtx.lineCap = 'round';
   bCtx.beginPath();
-  bCtx.moveTo(30, pathY);
-  bCtx.lineTo(w - 30, pathY);
+  bCtx.moveTo(40, pathY);
+  bCtx.lineTo(w - 50, pathY);
   bCtx.stroke();
 
+  // Castillo
   bCtx.fillStyle = '#3a2a1a';
-  bCtx.fillRect(w - 50, pathY - 40, 40, 80);
+  bCtx.fillRect(w - 60, pathY - 50, 50, 100);
   bCtx.fillStyle = '#2a1a0a';
-  bCtx.fillRect(w - 45, pathY - 30, 30, 60);
+  bCtx.fillRect(w - 55, pathY - 35, 40, 70);
   bCtx.fillStyle = '#d4a574';
-  bCtx.font = '12px Courier New';
+  bCtx.font = 'bold 13px Courier New';
   bCtx.textAlign = 'center';
-  bCtx.fillText('CASTILLO', w - 30, pathY + 55);
+  bCtx.fillText('CASTILLO', w - 35, pathY + 65);
 
   const progress = Math.max(0, 1 - (state.enemyHp / state.enemyMaxHp));
-  const ex = 40 + progress * (w - 90);
+  const ex = 50 + progress * (w - 120);
   const ey = pathY;
 
-  bCtx.fillStyle = '#a03030';
+  bCtx.fillStyle = '#c04040';
   bCtx.beginPath();
-  bCtx.arc(ex, ey, 18, 0, Math.PI * 2);
+  bCtx.arc(ex, ey, 22, 0, Math.PI * 2);
   bCtx.fill();
-  bCtx.strokeStyle = '#600000';
-  bCtx.lineWidth = 2;
+  bCtx.strokeStyle = '#800000';
+  bCtx.lineWidth = 3;
   bCtx.stroke();
 
-  const barW = 100;
+  const barW = 120;
   const barX = ex - barW / 2;
-  const barY = ey - 35;
+  const barY = ey - 42;
   bCtx.fillStyle = '#222';
-  bCtx.fillRect(barX, barY, barW, 8);
-  bCtx.fillStyle = '#c04040';
+  bCtx.fillRect(barX, barY, barW, 10);
+  bCtx.fillStyle = '#e04040';
   const hpRatio = Math.max(0, state.enemyHp / state.enemyMaxHp);
-  bCtx.fillRect(barX, barY, barW * hpRatio, 8);
-  bCtx.strokeStyle = '#444';
-  bCtx.strokeRect(barX, barY, barW, 8);
+  bCtx.fillRect(barX, barY, barW * hpRatio, 10);
+  bCtx.strokeStyle = '#555';
+  bCtx.strokeRect(barX, barY, barW, 10);
 
   bCtx.fillStyle = '#e0d8c8';
-  bCtx.font = 'bold 14px Courier New';
+  bCtx.font = 'bold 16px Courier New';
   bCtx.textAlign = 'left';
-  bCtx.fillText(`Oleada ${state.wave}`, 12, 24);
-  bCtx.font = '12px Courier New';
-  bCtx.fillText(`HP: ${Math.max(0, state.enemyHp)} / ${state.enemyMaxHp}`, 12, 42);
+  bCtx.fillText(`Oleada ${state.wave}`, 16, 28);
+  bCtx.font = '13px Courier New';
+  bCtx.fillText(`HP: ${Math.max(0, state.enemyHp)} / ${state.enemyMaxHp}`, 16, 48);
 }
 
 function render() {
