@@ -20,16 +20,16 @@
   }
   @media (min-width: 900px) {
     .container { flex-direction: row; }
-    #factoryCanvas { flex: 1.6; }
-    #battleCanvas  { flex: 0.9; }
+    #factoryCanvas { flex: 1.7; }
+    #battleCanvas  { flex: 0.8; }
   }
   canvas {
     display: block;
     background: #1a1520;
     width: 100%;
   }
-  #factoryCanvas { flex: 1.2; min-height: 55vh; }
-  #battleCanvas  { flex: 0.8; min-height: 28vh; border-top: 2px solid #3a2a1a; }
+  #factoryCanvas { flex: 1.3; min-height: 60vh; }
+  #battleCanvas  { flex: 0.7; min-height: 25vh; border-top: 2px solid #3a2a1a; }
   .ui {
     position: absolute;
     top: 8px;
@@ -88,7 +88,7 @@
     <button id="btnPath" onclick="selectPlace('path')">Camino (5)</button>
     <button onclick="selectPlace(null)">Cancelar</button>
   </div>
-  <div class="hint">Selecciona un botón y haz clic en la rejilla.</div>
+  <div class="hint">Selecciona y haz clic en la rejilla.</div>
 </div>
 
 <script>
@@ -106,21 +106,20 @@ const state = {
   forgeBuffers: new Map(),
 };
 
-const TILE_W = 72;
-const TILE_H = 36;
+const TILE_W = 96;
+const TILE_H = 48;
 const GRID = 8;
 let ORIGIN_X = 300;
-let ORIGIN_Y = 60;
+let ORIGIN_Y = 80;
 const DIRS = [[0,1],[1,0],[0,-1],[-1,0]];
 
 function updateOrigin() {
   const w = factoryCanvas.width;
   const h = factoryCanvas.height;
-  // Centrar la rejilla isométrica en el canvas
   const gridPixelW = GRID * (TILE_W / 2);
   const gridPixelH = GRID * (TILE_H / 2);
-  ORIGIN_X = (w - gridPixelW) / 2 + (GRID * TILE_W / 4);
-  ORIGIN_Y = (h - gridPixelH) / 2 - 20;
+  ORIGIN_X = w / 2;
+  ORIGIN_Y = (h - gridPixelH) / 2 + 10;
 }
 
 function gridToScreen(gx, gy) {
@@ -265,8 +264,8 @@ function drawDiamond(ctx, x, y, color) {
   ctx.closePath();
   ctx.fillStyle = color;
   ctx.fill();
-  ctx.strokeStyle = '#4a3a2a';
-  ctx.lineWidth = 1;
+  ctx.strokeStyle = '#5a4a3a';
+  ctx.lineWidth = 1.5;
   ctx.stroke();
 }
 
@@ -278,20 +277,20 @@ function renderFactory() {
       const { x, y } = gridToScreen(gx, gy);
       const node = state.grid[gy][gx];
       let color = '#2a2218';
-      if (node?.type === 'iron')  color = '#7a6a4a';
-      if (node?.type === 'mana')  color = '#4a5a7a';
-      if (node?.type === 'forge') color = '#7a4a3a';
-      if (node?.type === 'path')  color = '#5a4a6a';
+      if (node?.type === 'iron')  color = '#8a7a5a';
+      if (node?.type === 'mana')  color = '#5a6a8a';
+      if (node?.type === 'forge') color = '#8a5a4a';
+      if (node?.type === 'path')  color = '#6a5a7a';
       drawDiamond(fCtx, x, y, color);
     }
   }
 
   for (const item of state.moving) {
     const { x, y } = gridToScreen(item.gx, item.gy);
-    const color = item.type === 'iron' ? '#e0c070' : '#70c0e0';
+    const color = item.type === 'iron' ? '#f0d080' : '#80d0f0';
     fCtx.fillStyle = color;
     fCtx.beginPath();
-    fCtx.arc(x, y + 10, 6, 0, Math.PI * 2);
+    fCtx.arc(x, y + 12, 7, 0, Math.PI * 2);
     fCtx.fill();
   }
 }
@@ -304,46 +303,65 @@ function renderBattle() {
   bCtx.fillRect(0, 0, w, h);
 
   const pathY = h * 0.55;
-  bCtx.strokeStyle = '#6a5a4a';
-  bCtx.lineWidth = 18;
+  bCtx.strokeStyle = '#7a6a5a';
+  bCtx.lineWidth = 22;
   bCtx.lineCap = 'round';
   bCtx.beginPath();
-  bCtx.moveTo(40, pathY);
-  bCtx.lineTo(w - 50, pathY);
+  bCtx.moveTo(50, pathY);
+  bCtx.lineTo(w - 70, pathY);
   bCtx.stroke();
 
   // Castillo
   bCtx.fillStyle = '#3a2a1a';
-  bCtx.fillRect(w - 60, pathY - 50, 50, 100);
+  bCtx.fillRect(w - 70, pathY - 60, 60, 120);
   bCtx.fillStyle = '#2a1a0a';
-  bCtx.fillRect(w - 55, pathY - 35, 40, 70);
+  bCtx.fillRect(w - 65, pathY - 40, 50, 80);
   bCtx.fillStyle = '#d4a574';
-  bCtx.font = 'bold 13px Courier New';
+  bCtx.font = 'bold 14px Courier New';
   bCtx.textAlign = 'center';
-  bCtx.fillText('CASTILLO', w - 35, pathY + 65);
+  bCtx.fillText('CASTILLO', w - 40, pathY + 75);
 
   const progress = Math.max(0, 1 - (state.enemyHp / state.enemyMaxHp));
-  const ex = 50 + progress * (w - 120);
+  const ex = 60 + progress * (w - 150);
   const ey = pathY;
 
-  bCtx.fillStyle = '#c04040';
+  // Enemigo más claro
+  bCtx.fillStyle = '#d04040';
   bCtx.beginPath();
-  bCtx.arc(ex, ey, 22, 0, Math.PI * 2);
+  bCtx.arc(ex, ey, 26, 0, Math.PI * 2);
   bCtx.fill();
-  bCtx.strokeStyle = '#800000';
-  bCtx.lineWidth = 3;
+  bCtx.strokeStyle = '#900000';
+  bCtx.lineWidth = 4;
   bCtx.stroke();
 
-  const barW = 120;
+  // Ojos simples
+  bCtx.fillStyle = '#fff';
+  bCtx.beginPath();
+  bCtx.arc(ex - 8, ey - 6, 4, 0, Math.PI * 2);
+  bCtx.arc(ex + 8, ey - 6, 4, 0, Math.PI * 2);
+  bCtx.fill();
+  bCtx.fillStyle = '#000';
+  bCtx.beginPath();
+  bCtx.arc(ex - 8, ey - 6, 2, 0, Math.PI * 2);
+  bCtx.arc(ex + 8, ey - 6, 2, 0, Math.PI * 2);
+  bCtx.fill();
+
+  bCtx.fillStyle = '#fff';
+  bCtx.font = 'bold 12px Courier New';
+  bCtx.textAlign = 'center';
+  bCtx.fillText('ENEMIGO', ex, ey + 42);
+
+  const barW = 140;
   const barX = ex - barW / 2;
-  const barY = ey - 42;
+  const barY = ey - 50;
   bCtx.fillStyle = '#222';
-  bCtx.fillRect(barX, barY, barW, 10);
+  bCtx.fillRect(barX, barY, barW, 12);
   bCtx.fillStyle = '#e04040';
   const hpRatio = Math.max(0, state.enemyHp / state.enemyMaxHp);
-  bCtx.fillRect(barX, barY, barW * hpRatio, 10);
-  bCtx.strokeStyle = '#555';
-  bCtx.strokeRect(barX, barY, barW, 10);
+  bCtx.fillRect(barX, barY, barW * hpRatio, 12);
+  bCtx.strokeStyle = '#666';
+  bCtx.lineWidth = 1;
+  bCtx.strokeRect(barX, barY, barW, 12);
 
   bCtx.fillStyle = '#e0d8c8';
   bCtx.font = 'bold 16px Courier New';
