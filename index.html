@@ -18,38 +18,42 @@
     height: 100vh;
     width: 100vw;
   }
-  @media (min-width: 900px) {
+  @media (min-width: 1100px) {
     .container { flex-direction: row; }
-    #factoryCanvas { flex: 1.7; }
-    #battleCanvas  { flex: 0.8; }
+    #factoryCanvas { flex: 1.5; }
+    #battleCanvas  { flex: 1; }
   }
   canvas {
     display: block;
     background: #1a1520;
     width: 100%;
   }
-  #factoryCanvas { flex: 1.3; min-height: 60vh; }
-  #battleCanvas  { flex: 0.7; min-height: 25vh; border-top: 2px solid #3a2a1a; }
+  #factoryCanvas { flex: 1.2; min-height: 50vh; }
+  #battleCanvas  { flex: 1; min-height: 35vh; border-top: 2px solid #3a2a1a; }
   .ui {
     position: absolute;
     top: 8px;
     left: 8px;
-    background: rgba(10, 8, 6, 0.92);
+    background: rgba(10, 8, 6, 0.95);
     border: 1px solid #5a4a3a;
-    padding: 10px 14px;
+    padding: 12px 16px;
     border-radius: 6px;
-    min-width: 210px;
+    min-width: 240px;
     font-size: 13px;
-    line-height: 1.5;
+    line-height: 1.55;
     z-index: 10;
+    max-height: 90vh;
+    overflow-y: auto;
   }
-  .ui h2 { font-size: 15px; color: #d4a574; margin-bottom: 6px; }
+  .ui h2 { font-size: 16px; color: #d4a574; margin-bottom: 8px; }
   .resource { display: flex; justify-content: space-between; }
+  .section { margin-top: 10px; border-top: 1px solid #3a2a1a; padding-top: 8px; }
+  .section-title { color: #c09060; font-size: 12px; margin-bottom: 4px; }
   .buttons {
-    margin-top: 10px;
+    margin-top: 8px;
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: 4px;
   }
   button {
     background: #2a2218;
@@ -62,8 +66,9 @@
   }
   button:hover { background: #3a3228; }
   button.active { background: #5a4a2a; border-color: #d4a574; }
-  .wave-info { margin-top: 8px; color: #c07050; font-weight: bold; }
+  .wave-info { color: #c07050; font-weight: bold; }
   .hint { font-size: 11px; color: #a09070; margin-top: 6px; }
+  .selected { color: #d4a574; font-weight: bold; }
 </style>
 </head>
 <body>
@@ -73,29 +78,45 @@
 </div>
 
 <div class="ui">
-  <h2>Forge & Fend — Fase 2</h2>
+  <h2>Forge & Fend</h2>
   <div class="resource"><span>Oro</span><span id="gold">100</span></div>
-  <div class="resource"><span>Hierro</span><span id="iron">0</span></div>
-  <div class="resource"><span>Maná</span><span id="mana">0</span></div>
-  <div class="resource"><span>Espadas</span><span id="swords">0</span></div>
-  <div class="wave-info">
-    Oleada: <span id="wave">1</span> &nbsp; HP: <span id="enemyHp">10</span>
+  <div class="resource"><span>Espadas listas</span><span id="swords">0</span></div>
+
+  <div class="section">
+    <div class="section-title">MATERIALES EN FORJAS</div>
+    <div class="resource"><span>Hierro acumulado</span><span id="ironBuf">0</span></div>
+    <div class="resource"><span>Maná acumulado</span><span id="manaBuf">0</span></div>
   </div>
-  <div class="buttons">
-    <button id="btnIron" onclick="selectPlace('iron')">Extractor Hierro (15)</button>
-    <button id="btnMana" onclick="selectPlace('mana')">Extractor Maná (15)</button>
-    <button id="btnForge" onclick="selectPlace('forge')">Forja (40)</button>
-    <button id="btnPath" onclick="selectPlace('path')">Camino (5)</button>
-    <button onclick="selectPlace(null)">Cancelar</button>
+
+  <div class="section">
+    <div class="section-title">PODER DE ATAQUE</div>
+    <div class="resource"><span>Daño por espada</span><span id="dmg">4</span></div>
+    <div class="resource"><span>Espadas en esta oleada</span><span id="swordsThisWave">0</span></div>
   </div>
-  <div class="hint">Selecciona y haz clic en la rejilla.</div>
+
+  <div class="section">
+    <div class="section-title wave-info">OLEADA <span id="wave">1</span></div>
+    <div class="resource"><span>HP enemigo</span><span id="enemyHp">10 / 10</span></div>
+    <div class="resource"><span>Progreso oleada</span><span id="waveProg">0%</span></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">CONSTRUYENDO</div>
+    <div id="selectedText" class="selected">Nada seleccionado</div>
+    <div class="buttons">
+      <button id="btnIron" onclick="selectPlace('iron')">Extractor Hierro (15)</button>
+      <button id="btnMana" onclick="selectPlace('mana')">Extractor Maná (15)</button>
+      <button id="btnForge" onclick="selectPlace('forge')">Forja (40)</button>
+      <button id="btnPath" onclick="selectPlace('path')">Camino (5)</button>
+      <button onclick="selectPlace(null)">Cancelar</button>
+    </div>
+  </div>
+  <div class="hint">Selecciona y haz clic en la rejilla isométrica.</div>
 </div>
 
 <script>
 const state = {
   gold: 100,
-  iron: 0,
-  mana: 0,
   swords: 0,
   wave: 1,
   enemyHp: 10,
@@ -104,22 +125,23 @@ const state = {
   grid: Array.from({ length: 8 }, () => Array(8).fill(null)),
   moving: [],
   forgeBuffers: new Map(),
+  swordsThisWave: 0,
+  dmgPerSword: 4,
 };
 
-const TILE_W = 96;
-const TILE_H = 48;
+const TILE_W = 80;
+const TILE_H = 40;
 const GRID = 8;
 let ORIGIN_X = 300;
-let ORIGIN_Y = 80;
+let ORIGIN_Y = 70;
 const DIRS = [[0,1],[1,0],[0,-1],[-1,0]];
 
 function updateOrigin() {
   const w = factoryCanvas.width;
   const h = factoryCanvas.height;
-  const gridPixelW = GRID * (TILE_W / 2);
   const gridPixelH = GRID * (TILE_H / 2);
   ORIGIN_X = w / 2;
-  ORIGIN_Y = (h - gridPixelH) / 2 + 10;
+  ORIGIN_Y = (h - gridPixelH) / 2 + 20;
 }
 
 function gridToScreen(gx, gy) {
@@ -162,6 +184,15 @@ function findPathToForge(startX, startY) {
     }
   }
   return null;
+}
+
+function getTotalBuffers() {
+  let iron = 0, mana = 0;
+  for (const buf of state.forgeBuffers.values()) {
+    iron += buf.iron;
+    mana += buf.mana;
+  }
+  return { iron, mana };
 }
 
 const TICK_MS = 800;
@@ -216,6 +247,7 @@ function simulationTick() {
           buf.iron -= 2;
           buf.mana -= 1;
           state.swords++;
+          state.swordsThisWave++;
         }
 
         state.moving.splice(i, 1);
@@ -223,16 +255,16 @@ function simulationTick() {
     }
   }
 
-  const dmgPerSword = 4;
   while (state.swords > 0 && state.enemyHp > 0) {
     state.swords--;
-    state.enemyHp -= dmgPerSword;
+    state.enemyHp -= state.dmgPerSword;
   }
 
   if (state.enemyHp <= 0) {
     const reward = 8 + state.wave * 2;
     state.gold += reward;
     state.wave++;
+    state.swordsThisWave = 0;
     state.enemyMaxHp = Math.floor(10 * Math.pow(1.15, state.wave - 1));
     state.enemyHp = state.enemyMaxHp;
   }
@@ -282,6 +314,15 @@ function renderFactory() {
       if (node?.type === 'forge') color = '#8a5a4a';
       if (node?.type === 'path')  color = '#6a5a7a';
       drawDiamond(fCtx, x, y, color);
+
+      // Etiqueta pequeña en el nodo
+      if (node) {
+        fCtx.fillStyle = '#fff';
+        fCtx.font = '10px Courier New';
+        fCtx.textAlign = 'center';
+        const label = node.type === 'iron' ? 'H' : node.type === 'mana' ? 'M' : node.type === 'forge' ? 'F' : '·';
+        fCtx.fillText(label, x, y + TILE_H / 2 + 4);
+      }
     }
   }
 
@@ -290,7 +331,7 @@ function renderFactory() {
     const color = item.type === 'iron' ? '#f0d080' : '#80d0f0';
     fCtx.fillStyle = color;
     fCtx.beginPath();
-    fCtx.arc(x, y + 12, 7, 0, Math.PI * 2);
+    fCtx.arc(x, y + 14, 6, 0, Math.PI * 2);
     fCtx.fill();
   }
 }
@@ -302,73 +343,73 @@ function renderBattle() {
   bCtx.fillStyle = '#1a1520';
   bCtx.fillRect(0, 0, w, h);
 
-  const pathY = h * 0.55;
+  const pathY = h * 0.6;
+  const margin = 40;
   bCtx.strokeStyle = '#7a6a5a';
-  bCtx.lineWidth = 22;
+  bCtx.lineWidth = 20;
   bCtx.lineCap = 'round';
   bCtx.beginPath();
-  bCtx.moveTo(50, pathY);
-  bCtx.lineTo(w - 70, pathY);
+  bCtx.moveTo(margin, pathY);
+  bCtx.lineTo(w - margin - 40, pathY);
   bCtx.stroke();
 
-  // Castillo
+  // Castillo al final
+  const castleX = w - margin - 20;
   bCtx.fillStyle = '#3a2a1a';
-  bCtx.fillRect(w - 70, pathY - 60, 60, 120);
+  bCtx.fillRect(castleX - 20, pathY - 55, 50, 110);
   bCtx.fillStyle = '#2a1a0a';
-  bCtx.fillRect(w - 65, pathY - 40, 50, 80);
+  bCtx.fillRect(castleX - 15, pathY - 35, 40, 70);
   bCtx.fillStyle = '#d4a574';
-  bCtx.font = 'bold 14px Courier New';
+  bCtx.font = 'bold 13px Courier New';
   bCtx.textAlign = 'center';
-  bCtx.fillText('CASTILLO', w - 40, pathY + 75);
+  bCtx.fillText('CASTILLO', castleX + 5, pathY + 70);
 
   const progress = Math.max(0, 1 - (state.enemyHp / state.enemyMaxHp));
-  const ex = 60 + progress * (w - 150);
+  const ex = margin + 20 + progress * (w - margin * 2 - 80);
   const ey = pathY;
 
-  // Enemigo más claro
   bCtx.fillStyle = '#d04040';
   bCtx.beginPath();
-  bCtx.arc(ex, ey, 26, 0, Math.PI * 2);
+  bCtx.arc(ex, ey, 24, 0, Math.PI * 2);
   bCtx.fill();
   bCtx.strokeStyle = '#900000';
-  bCtx.lineWidth = 4;
+  bCtx.lineWidth = 3;
   bCtx.stroke();
 
-  // Ojos simples
   bCtx.fillStyle = '#fff';
   bCtx.beginPath();
-  bCtx.arc(ex - 8, ey - 6, 4, 0, Math.PI * 2);
-  bCtx.arc(ex + 8, ey - 6, 4, 0, Math.PI * 2);
+  bCtx.arc(ex - 7, ey - 5, 3.5, 0, Math.PI * 2);
+  bCtx.arc(ex + 7, ey - 5, 3.5, 0, Math.PI * 2);
   bCtx.fill();
   bCtx.fillStyle = '#000';
   bCtx.beginPath();
-  bCtx.arc(ex - 8, ey - 6, 2, 0, Math.PI * 2);
-  bCtx.arc(ex + 8, ey - 6, 2, 0, Math.PI * 2);
+  bCtx.arc(ex - 7, ey - 5, 1.8, 0, Math.PI * 2);
+  bCtx.arc(ex + 7, ey - 5, 1.8, 0, Math.PI * 2);
   bCtx.fill();
 
   bCtx.fillStyle = '#fff';
-  bCtx.font = 'bold 12px Courier New';
+  bCtx.font = 'bold 11px Courier New';
   bCtx.textAlign = 'center';
-  bCtx.fillText('ENEMIGO', ex, ey + 42);
+  bCtx.fillText('ENEMIGO', ex, ey + 40);
 
-  const barW = 140;
+  const barW = 130;
   const barX = ex - barW / 2;
-  const barY = ey - 50;
+  const barY = ey - 48;
   bCtx.fillStyle = '#222';
-  bCtx.fillRect(barX, barY, barW, 12);
+  bCtx.fillRect(barX, barY, barW, 10);
   bCtx.fillStyle = '#e04040';
   const hpRatio = Math.max(0, state.enemyHp / state.enemyMaxHp);
-  bCtx.fillRect(barX, barY, barW * hpRatio, 12);
+  bCtx.fillRect(barX, barY, barW * hpRatio, 10);
   bCtx.strokeStyle = '#666';
   bCtx.lineWidth = 1;
-  bCtx.strokeRect(barX, barY, barW, 12);
+  bCtx.strokeRect(barX, barY, barW, 10);
 
   bCtx.fillStyle = '#e0d8c8';
-  bCtx.font = 'bold 16px Courier New';
+  bCtx.font = 'bold 15px Courier New';
   bCtx.textAlign = 'left';
-  bCtx.fillText(`Oleada ${state.wave}`, 16, 28);
-  bCtx.font = '13px Courier New';
-  bCtx.fillText(`HP: ${Math.max(0, state.enemyHp)} / ${state.enemyMaxHp}`, 16, 48);
+  bCtx.fillText(`Oleada ${state.wave}`, 16, 26);
+  bCtx.font = '12px Courier New';
+  bCtx.fillText(`HP: ${Math.max(0, state.enemyHp)} / ${state.enemyMaxHp}`, 16, 44);
 }
 
 function render() {
@@ -381,6 +422,8 @@ requestAnimationFrame(render);
 function selectPlace(type) {
   state.selectedPlace = type;
   document.querySelectorAll('.buttons button').forEach(b => b.classList.remove('active'));
+  const names = { iron: 'Extractor Hierro', mana: 'Extractor Maná', forge: 'Nodo de Forja', path: 'Camino' };
+  document.getElementById('selectedText').textContent = type ? names[type] : 'Nada seleccionado';
   if (type === 'iron')  document.getElementById('btnIron').classList.add('active');
   if (type === 'mana')  document.getElementById('btnMana').classList.add('active');
   if (type === 'forge') document.getElementById('btnForge').classList.add('active');
@@ -407,12 +450,17 @@ factoryCanvas.addEventListener('click', (e) => {
 });
 
 function updateUI() {
-  document.getElementById('gold').textContent   = state.gold;
-  document.getElementById('iron').textContent   = state.iron;
-  document.getElementById('mana').textContent   = state.mana;
+  const buf = getTotalBuffers();
+  document.getElementById('gold').textContent = state.gold;
   document.getElementById('swords').textContent = state.swords;
-  document.getElementById('wave').textContent   = state.wave;
-  document.getElementById('enemyHp').textContent = Math.max(0, state.enemyHp);
+  document.getElementById('ironBuf').textContent = buf.iron;
+  document.getElementById('manaBuf').textContent = buf.mana;
+  document.getElementById('dmg').textContent = state.dmgPerSword;
+  document.getElementById('swordsThisWave').textContent = state.swordsThisWave;
+  document.getElementById('wave').textContent = state.wave;
+  document.getElementById('enemyHp').textContent = `${Math.max(0, state.enemyHp)} / ${state.enemyMaxHp}`;
+  const prog = Math.round((1 - state.enemyHp / state.enemyMaxHp) * 100);
+  document.getElementById('waveProg').textContent = `${prog}%`;
 }
 
 setInterval(simulationTick, 100);
