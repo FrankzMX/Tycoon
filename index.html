@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Forge & Fend: Fantasy Tycoon — Fase 1 MVP</title>
+<title>Forge & Fend: Fantasy Tycoon — Fase 2</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -72,8 +72,8 @@
 </div>
 
 <div class="ui">
-  <h2>Forge & Fend</h2>
-  <div class="resource"><span>Oro</span><span id="gold">80</span></div>
+  <h2>Forge & Fend — Fase 2</h2>
+  <div class="resource"><span>Oro</span><span id="gold">100</span></div>
   <div class="resource"><span>Hierro</span><span id="iron">0</span></div>
   <div class="resource"><span>Maná</span><span id="mana">0</span></div>
   <div class="resource"><span>Espadas</span><span id="swords">0</span></div>
@@ -84,13 +84,14 @@
     <button id="btnIron" onclick="selectPlace('iron')">Extractor Hierro (15 oro)</button>
     <button id="btnMana" onclick="selectPlace('mana')">Extractor Maná (15 oro)</button>
     <button id="btnForge" onclick="selectPlace('forge')">Nodo de Forja (40 oro)</button>
+    <button id="btnPath" onclick="selectPlace('path')">Camino (5 oro)</button>
     <button onclick="selectPlace(null)">Cancelar</button>
   </div>
 </div>
 
 <script>
 const state = {
-  gold: 80,
+  gold: 100,
   iron: 0,
   mana: 0,
   swords: 0,
@@ -99,6 +100,10 @@ const state = {
   enemyMaxHp: 10,
   selectedPlace: null,
   grid: Array.from({ length: 8 }, () => Array(8).fill(null)),
+  // Recursos en movimiento: { type, gx, gy, progress, nextGx, nextGy, path }
+  moving: [],
+  // Buffers locales en forjas: { gx, gy, iron, mana }
+  forgeBuffers: new Map(),
 };
 
 const TILE_W = 64;
@@ -106,6 +111,7 @@ const TILE_H = 32;
 const GRID = 8;
 const ORIGIN_X = 280;
 const ORIGIN_Y = 40;
+const DIRS = [[0,1],[1,0],[0,-1],[-1,0]];
 
 function gridToScreen(gx, gy) {
   return {
@@ -119,13 +125,38 @@ function screenToGrid(sx, sy) {
   const relY = sy - ORIGIN_Y;
   const gx = (relX / (TILE_W / 2) + relY / (TILE_H / 2)) / 2;
   const gy = (relY / (TILE_H / 2) - relX / (TILE_W / 2)) / 2;
-  return {
-    x: Math.round(gx),
-    y: Math.round(gy)
-  };
+  return { x: Math.round(gx), y: Math.round(gy) };
 }
 
-const TICK_MS = 1000;
+function isValid(x, y) {
+  return x >= 0 && x < GRID && y >= 0 && y < GRID;
+}
+
+// BFS simple para encontrar camino hasta la forja más cercana
+function findPathToForge(startX, startY) {
+  const queue = [[startX, startY, []]];
+  const visited = new Set([`${startX},${startY}`]);
+
+  while (queue.length) {
+    const [x, y, path] = queue.shift();
+    const node = state.grid[y][x];
+    if (node?.type === 'forge') return path.concat([[x, y]]);
+
+    for (const [dx, dy] of DIRS) {
+      const nx = x + dx, ny = y + dy;
+      const key = `${nx},${ny}`;
+      if (!isValid(nx, ny) || visited.has(key)) continue;
+      const n = state.grid[ny][nx];
+      if (n && (n.type === 'path' || n.type === 'forge')) {
+        visited.add(key);
+        queue.push([nx, ny, path.concat([[x, y]])]);
+      }
+    }
+  }
+  return null;
+}
+
+const TICK_MS = 800;
 let lastTick = performance.now();
 
 function simulationTick() {
@@ -133,26 +164,63 @@ function simulationTick() {
   if (now - lastTick < TICK_MS) return;
   lastTick = now;
 
+  // Extractores generan recursos si hay camino a una forja
   for (let y = 0; y < GRID; y++) {
     for (let x = 0; x < GRID; x++) {
       const node = state.grid[y][x];
-      if (!node) continue;
-      if (node.type === 'iron') state.iron++;
-      if (node.type === 'mana') state.mana++;
+      if (!node || (node.type !== 'iron' && node.type !== 'mana')) continue;
+
+      const path = findPathToForge(x, y);
+      if (!path || path.length < 2) continue;
+
+      // Spawn recurso que empieza a moverse
+      state.moving.push({
+        type: node.type,
+        gx: x,
+        gy: y,
+        progress: 0,
+        path: path.slice(1), // resto del camino
+        pathIndex: 0
+      });
     }
   }
 
-  for (let y = 0; y < GRID; y++) {
-    for (let x = 0; x < GRID; x++) {
-      const node = state.grid[y][x];
-      if (node?.type === 'forge' && state.iron >= 2 && state.mana >= 1) {
-        state.iron -= 2;
-        state.mana -= 1;
-        state.swords++;
+  // Mover recursos (un paso por tick)
+  for (let i = state.moving.length - 1; i >= 0; i--) {
+    const item = state.moving[i];
+    item.progress += 1;
+
+    if (item.progress >= 1) {
+      item.progress = 0;
+      if (item.pathIndex < item.path.length - 1) {
+        const [nx, ny] = item.path[item.pathIndex];
+        item.gx = nx;
+        item.gy = ny;
+        item.pathIndex++;
+      } else {
+        // Llegó a la forja
+        const [fx, fy] = item.path[item.path.length - 1];
+        const key = `${fx},${fy}`;
+        if (!state.forgeBuffers.has(key)) {
+          state.forgeBuffers.set(key, { iron: 0, mana: 0 });
+        }
+        const buf = state.forgeBuffers.get(key);
+        if (item.type === 'iron') buf.iron++;
+        if (item.type === 'mana') buf.mana++;
+
+        // Procesar si hay suficientes materiales
+        if (buf.iron >= 2 && buf.mana >= 1) {
+          buf.iron -= 2;
+          buf.mana -= 1;
+          state.swords++;
+        }
+
+        state.moving.splice(i, 1);
       }
     }
   }
 
+  // Daño con espadas
   const dmgPerSword = 4;
   while (state.swords > 0 && state.enemyHp > 0) {
     state.swords--;
@@ -194,12 +262,14 @@ function drawDiamond(ctx, x, y, color) {
   ctx.fillStyle = color;
   ctx.fill();
   ctx.strokeStyle = '#3a2a1a';
+  ctx.lineWidth = 1;
   ctx.stroke();
 }
 
 function renderFactory() {
   fCtx.clearRect(0, 0, factoryCanvas.width, factoryCanvas.height);
 
+  // Tiles
   for (let gy = GRID - 1; gy >= 0; gy--) {
     for (let gx = 0; gx < GRID; gx++) {
       const { x, y } = gridToScreen(gx, gy);
@@ -208,8 +278,19 @@ function renderFactory() {
       if (node?.type === 'iron')  color = '#6a5a3a';
       if (node?.type === 'mana')  color = '#3a4a6a';
       if (node?.type === 'forge') color = '#6a3a2a';
+      if (node?.type === 'path')  color = '#4a3a5a';
       drawDiamond(fCtx, x, y, color);
     }
+  }
+
+  // Recursos en movimiento (partículas)
+  for (const item of state.moving) {
+    const { x, y } = gridToScreen(item.gx, item.gy);
+    const color = item.type === 'iron' ? '#c0a060' : '#60a0c0';
+    fCtx.fillStyle = color;
+    fCtx.beginPath();
+    fCtx.arc(x, y + 8, 5, 0, Math.PI * 2);
+    fCtx.fill();
   }
 }
 
@@ -220,7 +301,6 @@ function renderBattle() {
   bCtx.fillStyle = '#1a1520';
   bCtx.fillRect(0, 0, w, h);
 
-  // Camino
   const pathY = h * 0.55;
   bCtx.strokeStyle = '#5a4a3a';
   bCtx.lineWidth = 14;
@@ -230,7 +310,6 @@ function renderBattle() {
   bCtx.lineTo(w - 30, pathY);
   bCtx.stroke();
 
-  // Puerta del castillo (derecha)
   bCtx.fillStyle = '#3a2a1a';
   bCtx.fillRect(w - 50, pathY - 40, 40, 80);
   bCtx.fillStyle = '#2a1a0a';
@@ -240,12 +319,10 @@ function renderBattle() {
   bCtx.textAlign = 'center';
   bCtx.fillText('CASTILLO', w - 30, pathY + 55);
 
-  // Progreso del enemigo (0 = lejos, 1 = en la puerta)
   const progress = Math.max(0, 1 - (state.enemyHp / state.enemyMaxHp));
   const ex = 40 + progress * (w - 90);
   const ey = pathY;
 
-  // Enemigo
   bCtx.fillStyle = '#a03030';
   bCtx.beginPath();
   bCtx.arc(ex, ey, 18, 0, Math.PI * 2);
@@ -254,7 +331,6 @@ function renderBattle() {
   bCtx.lineWidth = 2;
   bCtx.stroke();
 
-  // Barra de vida grande
   const barW = 100;
   const barX = ex - barW / 2;
   const barY = ey - 35;
@@ -266,7 +342,6 @@ function renderBattle() {
   bCtx.strokeStyle = '#444';
   bCtx.strokeRect(barX, barY, barW, 8);
 
-  // Etiqueta de oleada
   bCtx.fillStyle = '#e0d8c8';
   bCtx.font = 'bold 14px Courier New';
   bCtx.textAlign = 'left';
@@ -288,6 +363,7 @@ function selectPlace(type) {
   if (type === 'iron')  document.getElementById('btnIron').classList.add('active');
   if (type === 'mana')  document.getElementById('btnMana').classList.add('active');
   if (type === 'forge') document.getElementById('btnForge').classList.add('active');
+  if (type === 'path')  document.getElementById('btnPath').classList.add('active');
 }
 
 factoryCanvas.addEventListener('click', (e) => {
@@ -297,10 +373,11 @@ factoryCanvas.addEventListener('click', (e) => {
   const sy = e.clientY - rect.top;
   const { x: gx, y: gy } = screenToGrid(sx, sy);
 
-  if (gx < 0 || gx >= GRID || gy < 0 || gy >= GRID) return;
+  if (!isValid(gx, gy)) return;
   if (state.grid[gy][gx]) return;
 
-  const cost = state.selectedPlace === 'forge' ? 40 : 15;
+  const costs = { iron: 15, mana: 15, forge: 40, path: 5 };
+  const cost = costs[state.selectedPlace];
   if (state.gold < cost) return;
 
   state.gold -= cost;
