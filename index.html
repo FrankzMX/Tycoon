@@ -2,6 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Forge & Fend: Fantasy Tycoon — Fase 1 MVP</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -13,47 +14,55 @@
   }
   .container {
     display: flex;
+    flex-direction: column;
     height: 100vh;
     width: 100vw;
+  }
+  @media (min-width: 900px) {
+    .container { flex-direction: row; }
+    #factoryCanvas { flex: 1.5; }
+    #battleCanvas  { flex: 1; }
   }
   canvas {
     display: block;
     background: #1a1520;
+    width: 100%;
   }
-  #factoryCanvas { flex: 1.4; border-right: 2px solid #3a2a1a; }
-  #battleCanvas  { flex: 1; }
+  #factoryCanvas { flex: 1.2; min-height: 50vh; }
+  #battleCanvas  { flex: 0.8; min-height: 30vh; border-top: 2px solid #3a2a1a; }
   .ui {
     position: absolute;
-    top: 12px;
-    left: 12px;
-    background: rgba(10, 8, 6, 0.85);
+    top: 8px;
+    left: 8px;
+    background: rgba(10, 8, 6, 0.9);
     border: 1px solid #5a4a3a;
-    padding: 12px 16px;
-    border-radius: 4px;
-    min-width: 220px;
-    font-size: 14px;
-    line-height: 1.6;
+    padding: 10px 14px;
+    border-radius: 6px;
+    min-width: 200px;
+    font-size: 13px;
+    line-height: 1.5;
+    z-index: 10;
   }
-  .ui h2 { font-size: 16px; color: #d4a574; margin-bottom: 8px; }
+  .ui h2 { font-size: 15px; color: #d4a574; margin-bottom: 6px; }
   .resource { display: flex; justify-content: space-between; }
   .buttons {
-    margin-top: 12px;
+    margin-top: 10px;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 5px;
   }
   button {
     background: #2a2218;
     color: #e0d8c8;
     border: 1px solid #5a4a3a;
-    padding: 6px 10px;
+    padding: 5px 8px;
     cursor: pointer;
     font-family: inherit;
-    font-size: 13px;
+    font-size: 12px;
   }
   button:hover { background: #3a3228; }
   button.active { background: #5a4a2a; border-color: #d4a574; }
-  .wave-info { margin-top: 10px; color: #c07050; }
+  .wave-info { margin-top: 8px; color: #c07050; font-weight: bold; }
 </style>
 </head>
 <body>
@@ -80,9 +89,6 @@
 </div>
 
 <script>
-// =============================================================================
-// ESTADO GLOBAL DEL JUEGO
-// =============================================================================
 const state = {
   gold: 80,
   iron: 0,
@@ -95,24 +101,12 @@ const state = {
   grid: Array.from({ length: 8 }, () => Array(8).fill(null)),
 };
 
-// =============================================================================
-// CONSTANTES ISOMÉTRICAS (relación 2:1)
-// =============================================================================
 const TILE_W = 64;
 const TILE_H = 32;
 const GRID = 8;
 const ORIGIN_X = 280;
 const ORIGIN_Y = 40;
 
-// =============================================================================
-// CONVERSIÓN CARTESIANA ↔ ISOMÉTRICA
-// =============================================================================
-/**
- * Convierte coordenadas de rejilla (x,y) a posición de pantalla isométrica.
- * Fórmula clásica 2:1:
- *   screenX = originX + (gridX - gridY) * (tileW / 2)
- *   screenY = originY + (gridX + gridY) * (tileH / 2)
- */
 function gridToScreen(gx, gy) {
   return {
     x: ORIGIN_X + (gx - gy) * (TILE_W / 2),
@@ -120,10 +114,6 @@ function gridToScreen(gx, gy) {
   };
 }
 
-/**
- * Convierte posición de pantalla a coordenadas de rejilla.
- * Inversa de la fórmula anterior (con redondeo a entero más cercano).
- */
 function screenToGrid(sx, sy) {
   const relX = sx - ORIGIN_X;
   const relY = sy - ORIGIN_Y;
@@ -135,9 +125,6 @@ function screenToGrid(sx, sy) {
   };
 }
 
-// =============================================================================
-// SIMULACIÓN (TICKS) — independiente del render
-// =============================================================================
 const TICK_MS = 1000;
 let lastTick = performance.now();
 
@@ -146,7 +133,6 @@ function simulationTick() {
   if (now - lastTick < TICK_MS) return;
   lastTick = now;
 
-  // Producción de extractores
   for (let y = 0; y < GRID; y++) {
     for (let x = 0; x < GRID; x++) {
       const node = state.grid[y][x];
@@ -156,7 +142,6 @@ function simulationTick() {
     }
   }
 
-  // Procesamiento en forjas (2 hierro + 1 maná → 1 espada)
   for (let y = 0; y < GRID; y++) {
     for (let x = 0; x < GRID; x++) {
       const node = state.grid[y][x];
@@ -168,14 +153,12 @@ function simulationTick() {
     }
   }
 
-  // Consumo de espadas para dañar al enemigo
   const dmgPerSword = 4;
   while (state.swords > 0 && state.enemyHp > 0) {
     state.swords--;
     state.enemyHp -= dmgPerSword;
   }
 
-  // Muerte del enemigo y nueva oleada
   if (state.enemyHp <= 0) {
     const reward = 8 + state.wave * 2;
     state.gold += reward;
@@ -187,9 +170,6 @@ function simulationTick() {
   updateUI();
 }
 
-// =============================================================================
-// RENDERIZADO
-// =============================================================================
 const factoryCanvas = document.getElementById('factoryCanvas');
 const battleCanvas  = document.getElementById('battleCanvas');
 const fCtx = factoryCanvas.getContext('2d');
@@ -234,33 +214,65 @@ function renderFactory() {
 }
 
 function renderBattle() {
-  bCtx.clearRect(0, 0, battleCanvas.width, battleCanvas.height);
+  const w = battleCanvas.width;
+  const h = battleCanvas.height;
+  bCtx.clearRect(0, 0, w, h);
   bCtx.fillStyle = '#1a1520';
-  bCtx.fillRect(0, 0, battleCanvas.width, battleCanvas.height);
+  bCtx.fillRect(0, 0, w, h);
 
-  bCtx.strokeStyle = '#4a3a2a';
-  bCtx.lineWidth = 8;
+  // Camino
+  const pathY = h * 0.55;
+  bCtx.strokeStyle = '#5a4a3a';
+  bCtx.lineWidth = 14;
+  bCtx.lineCap = 'round';
   bCtx.beginPath();
-  bCtx.moveTo(40, battleCanvas.height * 0.6);
-  bCtx.lineTo(battleCanvas.width - 40, battleCanvas.height * 0.4);
+  bCtx.moveTo(30, pathY);
+  bCtx.lineTo(w - 30, pathY);
   bCtx.stroke();
 
-  const progress = 1 - (state.enemyHp / state.enemyMaxHp);
-  const ex = 40 + progress * (battleCanvas.width - 80);
-  const ey = battleCanvas.height * 0.6 - progress * (battleCanvas.height * 0.2);
+  // Puerta del castillo (derecha)
+  bCtx.fillStyle = '#3a2a1a';
+  bCtx.fillRect(w - 50, pathY - 40, 40, 80);
+  bCtx.fillStyle = '#2a1a0a';
+  bCtx.fillRect(w - 45, pathY - 30, 30, 60);
+  bCtx.fillStyle = '#d4a574';
+  bCtx.font = '12px Courier New';
+  bCtx.textAlign = 'center';
+  bCtx.fillText('CASTILLO', w - 30, pathY + 55);
 
-  bCtx.fillStyle = '#8a2a2a';
+  // Progreso del enemigo (0 = lejos, 1 = en la puerta)
+  const progress = Math.max(0, 1 - (state.enemyHp / state.enemyMaxHp));
+  const ex = 40 + progress * (w - 90);
+  const ey = pathY;
+
+  // Enemigo
+  bCtx.fillStyle = '#a03030';
   bCtx.beginPath();
-  bCtx.arc(ex, ey, 16, 0, Math.PI * 2);
+  bCtx.arc(ex, ey, 18, 0, Math.PI * 2);
   bCtx.fill();
+  bCtx.strokeStyle = '#600000';
+  bCtx.lineWidth = 2;
+  bCtx.stroke();
 
-  const barW = 80;
+  // Barra de vida grande
+  const barW = 100;
   const barX = ex - barW / 2;
-  const barY = ey - 30;
+  const barY = ey - 35;
   bCtx.fillStyle = '#222';
-  bCtx.fillRect(barX, barY, barW, 6);
+  bCtx.fillRect(barX, barY, barW, 8);
   bCtx.fillStyle = '#c04040';
-  bCtx.fillRect(barX, barY, barW * (state.enemyHp / state.enemyMaxHp), 6);
+  const hpRatio = Math.max(0, state.enemyHp / state.enemyMaxHp);
+  bCtx.fillRect(barX, barY, barW * hpRatio, 8);
+  bCtx.strokeStyle = '#444';
+  bCtx.strokeRect(barX, barY, barW, 8);
+
+  // Etiqueta de oleada
+  bCtx.fillStyle = '#e0d8c8';
+  bCtx.font = 'bold 14px Courier New';
+  bCtx.textAlign = 'left';
+  bCtx.fillText(`Oleada ${state.wave}`, 12, 24);
+  bCtx.font = '12px Courier New';
+  bCtx.fillText(`HP: ${Math.max(0, state.enemyHp)} / ${state.enemyMaxHp}`, 12, 42);
 }
 
 function render() {
@@ -270,9 +282,6 @@ function render() {
 }
 requestAnimationFrame(render);
 
-// =============================================================================
-// INTERACCIÓN
-// =============================================================================
 function selectPlace(type) {
   state.selectedPlace = type;
   document.querySelectorAll('.buttons button').forEach(b => b.classList.remove('active'));
