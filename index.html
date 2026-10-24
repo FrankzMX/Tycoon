@@ -64,6 +64,8 @@
   button:disabled { opacity: 0.5; cursor: not-allowed; }
   .wave-info { color: #c07050; font-weight: bold; }
   .hint { font-size: 11px; color: #a09070; margin-top: 6px; }
+  .status { font-size: 12px; margin-top: 4px; color: #80c080; }
+  .status.bad { color: #c07050; }
   .selected { color: #d4a574; font-weight: bold; }
   .upgrade-btn { font-size: 11px; padding: 4px 6px; }
 </style>
@@ -95,6 +97,7 @@
     <div class="section-title wave-info">OLEADA <span id="wave">1</span></div>
     <div class="resource"><span>HP enemigo</span><span id="enemyHp">10 / 10</span></div>
     <div class="resource"><span>Progreso</span><span id="waveProg">0%</span></div>
+    <div id="flowStatus" class="status">Comprobando flujo...</div>
   </div>
 
   <div class="section">
@@ -138,6 +141,7 @@ const state = {
   dmgPerSword: 4,
   prodLevel: 1,
   speedLevel: 1,
+  hasActiveFlow: false,
 };
 
 const TILE_W = 80;
@@ -253,7 +257,7 @@ function loadGame() {
 }
 
 let tickAccumulator = 0;
-const BASE_TICK = 800;
+const BASE_TICK = 700;
 
 function simulationTick(dt) {
   tickAccumulator += dt;
@@ -262,27 +266,31 @@ function simulationTick(dt) {
   if (tickAccumulator < tickInterval) return;
   tickAccumulator -= tickInterval;
 
-  const prodChance = Math.min(1, 0.6 + state.prodLevel * 0.15);
+  state.hasActiveFlow = false;
 
   for (let y = 0; y < GRID; y++) {
     for (let x = 0; x < GRID; x++) {
       const node = state.grid[y][x];
       if (!node || (node.type !== 'iron' && node.type !== 'mana')) continue;
-      if (Math.random() > prodChance) continue;
 
       const path = findPathToForge(x, y);
       if (!path || path.length < 2) continue;
 
-      state.moving.push({
-        type: node.type,
-        path: path,
-        pathIndex: 0,
-        progress: 0
-      });
+      state.hasActiveFlow = true;
+
+      // Producción más consistente: siempre intenta si hay camino
+      if (Math.random() < 0.85 + state.prodLevel * 0.05) {
+        state.moving.push({
+          type: node.type,
+          path: path,
+          pathIndex: 0,
+          progress: 0
+        });
+      }
     }
   }
 
-  const moveSpeed = 0.8 + state.speedLevel * 0.3;
+  const moveSpeed = 1.0 + state.speedLevel * 0.4;
 
   for (let i = state.moving.length - 1; i >= 0; i--) {
     const item = state.moving[i];
@@ -528,6 +536,15 @@ function updateUI() {
   document.getElementById('enemyHp').textContent = `${Math.max(0, state.enemyHp)} / ${state.enemyMaxHp}`;
   const prog = Math.round((1 - state.enemyHp / state.enemyMaxHp) * 100);
   document.getElementById('waveProg').textContent = `${prog}%`;
+
+  const statusEl = document.getElementById('flowStatus');
+  if (state.hasActiveFlow) {
+    statusEl.textContent = 'Flujo activo — recursos en camino';
+    statusEl.className = 'status';
+  } else {
+    statusEl.textContent = 'Sin flujo: conecta extractores a forja con caminos';
+    statusEl.className = 'status bad';
+  }
 
   document.getElementById('costDmg').textContent = getUpgradeCost('dmg');
   document.getElementById('costProd').textContent = getUpgradeCost('prod');
