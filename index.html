@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Forge & Fend: Fantasy Tycoon — Fase 2</title>
+<title>Forge & Fend: Fantasy Tycoon</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -38,23 +38,18 @@
     border: 1px solid #5a4a3a;
     padding: 12px 16px;
     border-radius: 6px;
-    min-width: 240px;
+    min-width: 250px;
     font-size: 13px;
-    line-height: 1.55;
+    line-height: 1.5;
     z-index: 10;
-    max-height: 90vh;
+    max-height: 92vh;
     overflow-y: auto;
   }
   .ui h2 { font-size: 16px; color: #d4a574; margin-bottom: 8px; }
   .resource { display: flex; justify-content: space-between; }
   .section { margin-top: 10px; border-top: 1px solid #3a2a1a; padding-top: 8px; }
   .section-title { color: #c09060; font-size: 12px; margin-bottom: 4px; }
-  .buttons {
-    margin-top: 8px;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
+  .buttons { margin-top: 6px; display: flex; flex-direction: column; gap: 4px; }
   button {
     background: #2a2218;
     color: #e0d8c8;
@@ -66,9 +61,11 @@
   }
   button:hover { background: #3a3228; }
   button.active { background: #5a4a2a; border-color: #d4a574; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
   .wave-info { color: #c07050; font-weight: bold; }
   .hint { font-size: 11px; color: #a09070; margin-top: 6px; }
   .selected { color: #d4a574; font-weight: bold; }
+  .upgrade-btn { font-size: 11px; padding: 4px 6px; }
 </style>
 </head>
 <body>
@@ -84,20 +81,29 @@
 
   <div class="section">
     <div class="section-title">MATERIALES EN FORJAS</div>
-    <div class="resource"><span>Hierro acumulado</span><span id="ironBuf">0</span></div>
-    <div class="resource"><span>Maná acumulado</span><span id="manaBuf">0</span></div>
+    <div class="resource"><span>Hierro</span><span id="ironBuf">0</span></div>
+    <div class="resource"><span>Maná</span><span id="manaBuf">0</span></div>
   </div>
 
   <div class="section">
     <div class="section-title">PODER DE ATAQUE</div>
-    <div class="resource"><span>Daño por espada</span><span id="dmg">4</span></div>
-    <div class="resource"><span>Espadas en esta oleada</span><span id="swordsThisWave">0</span></div>
+    <div class="resource"><span>Daño / espada</span><span id="dmg">4</span></div>
+    <div class="resource"><span>Espadas esta oleada</span><span id="swordsThisWave">0</span></div>
   </div>
 
   <div class="section">
     <div class="section-title wave-info">OLEADA <span id="wave">1</span></div>
     <div class="resource"><span>HP enemigo</span><span id="enemyHp">10 / 10</span></div>
-    <div class="resource"><span>Progreso oleada</span><span id="waveProg">0%</span></div>
+    <div class="resource"><span>Progreso</span><span id="waveProg">0%</span></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">MEJORAS</div>
+    <div class="buttons">
+      <button class="upgrade-btn" id="btnUpDmg" onclick="buyUpgrade('dmg')">+1 Daño (<span id="costDmg">50</span> oro)</button>
+      <button class="upgrade-btn" id="btnUpProd" onclick="buyUpgrade('prod')">+Vel. Producción (<span id="costProd">40</span> oro)</button>
+      <button class="upgrade-btn" id="btnUpSpeed" onclick="buyUpgrade('speed')">+Vel. Transporte (<span id="costSpeed">30</span> oro)</button>
+    </div>
   </div>
 
   <div class="section">
@@ -111,10 +117,13 @@
       <button onclick="selectPlace(null)">Cancelar</button>
     </div>
   </div>
-  <div class="hint">Selecciona y haz clic en la rejilla isométrica.</div>
+  <div class="hint">Selecciona y haz clic en la rejilla.</div>
+  <div class="hint" id="saveStatus">Guardado automático activo</div>
 </div>
 
 <script>
+const SAVE_KEY = 'forgeAndFend_save_v1';
+
 const state = {
   gold: 100,
   swords: 0,
@@ -127,6 +136,8 @@ const state = {
   forgeBuffers: new Map(),
   swordsThisWave: 0,
   dmgPerSword: 4,
+  prodLevel: 1,
+  speedLevel: 1,
 };
 
 const TILE_W = 80;
@@ -195,50 +206,95 @@ function getTotalBuffers() {
   return { iron, mana };
 }
 
-const TICK_MS = 800;
-let lastTick = performance.now();
+function getUpgradeCost(type) {
+  if (type === 'dmg') return Math.floor(50 * Math.pow(1.6, state.dmgPerSword - 4));
+  if (type === 'prod') return Math.floor(40 * Math.pow(1.5, state.prodLevel - 1));
+  if (type === 'speed') return Math.floor(30 * Math.pow(1.4, state.speedLevel - 1));
+  return 999;
+}
 
-function simulationTick() {
-  const now = performance.now();
-  if (now - lastTick < TICK_MS) return;
-  lastTick = now;
+function buyUpgrade(type) {
+  const cost = getUpgradeCost(type);
+  if (state.gold < cost) return;
+  state.gold -= cost;
+  if (type === 'dmg') state.dmgPerSword++;
+  if (type === 'prod') state.prodLevel++;
+  if (type === 'speed') state.speedLevel++;
+  saveGame();
+  updateUI();
+}
+
+function saveGame() {
+  const data = {
+    gold: state.gold,
+    wave: state.wave,
+    enemyHp: state.enemyHp,
+    enemyMaxHp: state.enemyMaxHp,
+    grid: state.grid,
+    dmgPerSword: state.dmgPerSword,
+    prodLevel: state.prodLevel,
+    speedLevel: state.speedLevel,
+    swordsThisWave: state.swordsThisWave,
+  };
+  localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+  document.getElementById('saveStatus').textContent = 'Guardado';
+}
+
+function loadGame() {
+  const raw = localStorage.getItem(SAVE_KEY);
+  if (!raw) return;
+  try {
+    const data = JSON.parse(raw);
+    Object.assign(state, data);
+    state.forgeBuffers = new Map();
+    state.moving = [];
+    state.swords = 0;
+  } catch (e) { console.warn('Save corrupt'); }
+}
+
+let tickAccumulator = 0;
+const BASE_TICK = 800;
+
+function simulationTick(dt) {
+  tickAccumulator += dt;
+  const tickInterval = BASE_TICK / state.speedLevel;
+
+  if (tickAccumulator < tickInterval) return;
+  tickAccumulator -= tickInterval;
+
+  const prodChance = Math.min(1, 0.6 + state.prodLevel * 0.15);
 
   for (let y = 0; y < GRID; y++) {
     for (let x = 0; x < GRID; x++) {
       const node = state.grid[y][x];
       if (!node || (node.type !== 'iron' && node.type !== 'mana')) continue;
+      if (Math.random() > prodChance) continue;
 
       const path = findPathToForge(x, y);
       if (!path || path.length < 2) continue;
 
       state.moving.push({
         type: node.type,
-        gx: x,
-        gy: y,
-        progress: 0,
-        path: path.slice(1),
-        pathIndex: 0
+        path: path,
+        pathIndex: 0,
+        progress: 0
       });
     }
   }
 
+  const moveSpeed = 0.8 + state.speedLevel * 0.3;
+
   for (let i = state.moving.length - 1; i >= 0; i--) {
     const item = state.moving[i];
-    item.progress += 1;
+    item.progress += moveSpeed * (dt / 1000);
 
     if (item.progress >= 1) {
       item.progress = 0;
-      if (item.pathIndex < item.path.length - 1) {
-        const [nx, ny] = item.path[item.pathIndex];
-        item.gx = nx;
-        item.gy = ny;
-        item.pathIndex++;
-      } else {
+      item.pathIndex++;
+      if (item.pathIndex >= item.path.length - 1) {
         const [fx, fy] = item.path[item.path.length - 1];
         const key = `${fx},${fy}`;
-        if (!state.forgeBuffers.has(key)) {
-          state.forgeBuffers.set(key, { iron: 0, mana: 0 });
-        }
+        if (!state.forgeBuffers.has(key)) state.forgeBuffers.set(key, { iron: 0, mana: 0 });
         const buf = state.forgeBuffers.get(key);
         if (item.type === 'iron') buf.iron++;
         if (item.type === 'mana') buf.mana++;
@@ -249,7 +305,6 @@ function simulationTick() {
           state.swords++;
           state.swordsThisWave++;
         }
-
         state.moving.splice(i, 1);
       }
     }
@@ -261,12 +316,12 @@ function simulationTick() {
   }
 
   if (state.enemyHp <= 0) {
-    const reward = 8 + state.wave * 2;
-    state.gold += reward;
+    state.gold += 8 + state.wave * 2;
     state.wave++;
     state.swordsThisWave = 0;
     state.enemyMaxHp = Math.floor(10 * Math.pow(1.15, state.wave - 1));
     state.enemyHp = state.enemyMaxHp;
+    saveGame();
   }
 
   updateUI();
@@ -315,10 +370,9 @@ function renderFactory() {
       if (node?.type === 'path')  color = '#6a5a7a';
       drawDiamond(fCtx, x, y, color);
 
-      // Etiqueta pequeña en el nodo
       if (node) {
         fCtx.fillStyle = '#fff';
-        fCtx.font = '10px Courier New';
+        fCtx.font = '11px Courier New';
         fCtx.textAlign = 'center';
         const label = node.type === 'iron' ? 'H' : node.type === 'mana' ? 'M' : node.type === 'forge' ? 'F' : '·';
         fCtx.fillText(label, x, y + TILE_H / 2 + 4);
@@ -327,7 +381,16 @@ function renderFactory() {
   }
 
   for (const item of state.moving) {
-    const { x, y } = gridToScreen(item.gx, item.gy);
+    const idx = item.pathIndex;
+    if (idx >= item.path.length - 1) continue;
+    const [ax, ay] = item.path[idx];
+    const [bx, by] = item.path[idx + 1];
+    const posA = gridToScreen(ax, ay);
+    const posB = gridToScreen(bx, by);
+    const t = Math.min(1, item.progress);
+    const x = posA.x + (posB.x - posA.x) * t;
+    const y = posA.y + (posB.y - posA.y) * t;
+
     const color = item.type === 'iron' ? '#f0d080' : '#80d0f0';
     fCtx.fillStyle = color;
     fCtx.beginPath();
@@ -353,7 +416,6 @@ function renderBattle() {
   bCtx.lineTo(w - margin - 40, pathY);
   bCtx.stroke();
 
-  // Castillo al final
   const castleX = w - margin - 20;
   bCtx.fillStyle = '#3a2a1a';
   bCtx.fillRect(castleX - 20, pathY - 55, 50, 110);
@@ -412,7 +474,11 @@ function renderBattle() {
   bCtx.fillText(`HP: ${Math.max(0, state.enemyHp)} / ${state.enemyMaxHp}`, 16, 44);
 }
 
-function render() {
+let lastTime = performance.now();
+function render(now = performance.now()) {
+  const dt = now - lastTime;
+  lastTime = now;
+  simulationTick(dt);
   renderFactory();
   renderBattle();
   requestAnimationFrame(render);
@@ -446,6 +512,7 @@ factoryCanvas.addEventListener('click', (e) => {
 
   state.gold -= cost;
   state.grid[gy][gx] = { type: state.selectedPlace };
+  saveGame();
   updateUI();
 });
 
@@ -461,10 +528,19 @@ function updateUI() {
   document.getElementById('enemyHp').textContent = `${Math.max(0, state.enemyHp)} / ${state.enemyMaxHp}`;
   const prog = Math.round((1 - state.enemyHp / state.enemyMaxHp) * 100);
   document.getElementById('waveProg').textContent = `${prog}%`;
+
+  document.getElementById('costDmg').textContent = getUpgradeCost('dmg');
+  document.getElementById('costProd').textContent = getUpgradeCost('prod');
+  document.getElementById('costSpeed').textContent = getUpgradeCost('speed');
+
+  document.getElementById('btnUpDmg').disabled = state.gold < getUpgradeCost('dmg');
+  document.getElementById('btnUpProd').disabled = state.gold < getUpgradeCost('prod');
+  document.getElementById('btnUpSpeed').disabled = state.gold < getUpgradeCost('speed');
 }
 
-setInterval(simulationTick, 100);
+loadGame();
 updateUI();
+setInterval(saveGame, 10000);
 </script>
 </body>
 </html>
