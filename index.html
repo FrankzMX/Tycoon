@@ -18,18 +18,18 @@
     height: 100vh;
     width: 100vw;
   }
-  @media (min-width: 1100px) {
+  @media (min-width: 1000px) {
     .container { flex-direction: row; }
-    #factoryCanvas { flex: 1.5; }
-    #battleCanvas  { flex: 1; }
+    #factoryCanvas { flex: 1.6; }
+    #battleCanvas  { flex: 0.9; }
   }
   canvas {
     display: block;
     background: #1a1520;
     width: 100%;
   }
-  #factoryCanvas { flex: 1.2; min-height: 50vh; }
-  #battleCanvas  { flex: 1; min-height: 35vh; border-top: 2px solid #3a2a1a; }
+  #factoryCanvas { flex: 1.3; min-height: 55vh; }
+  #battleCanvas  { flex: 0.9; min-height: 32vh; border-top: 2px solid #3a2a1a; }
   .ui {
     position: absolute;
     top: 8px;
@@ -144,11 +144,11 @@ const state = {
   hasActiveFlow: false,
 };
 
-const TILE_W = 80;
-const TILE_H = 40;
+const TILE_W = 92;
+const TILE_H = 46;
 const GRID = 8;
 let ORIGIN_X = 300;
-let ORIGIN_Y = 70;
+let ORIGIN_Y = 60;
 const DIRS = [[0,1],[1,0],[0,-1],[-1,0]];
 
 function updateOrigin() {
@@ -156,13 +156,9 @@ function updateOrigin() {
   const h = factoryCanvas.height;
   const gridPixelH = GRID * (TILE_H / 2);
   ORIGIN_X = w / 2;
-  ORIGIN_Y = (h - gridPixelH) / 2 + 20;
+  ORIGIN_Y = Math.max(40, (h - gridPixelH) / 2 - 10);
 }
 
-/**
- * Convierte coordenadas de rejilla a pantalla.
- * El punto devuelto es la PUNTA SUPERIOR del rombo.
- */
 function gridToScreen(gx, gy) {
   return {
     x: ORIGIN_X + (gx - gy) * (TILE_W / 2),
@@ -170,18 +166,11 @@ function gridToScreen(gx, gy) {
   };
 }
 
-/**
- * Convierte posición de pantalla a rejilla.
- * Compensa que el origen del rombo es su punta superior
- * desplazando media altura para centrar el hit.
- */
 function screenToGrid(sx, sy) {
   const relX = sx - ORIGIN_X;
-  const relY = sy - ORIGIN_Y - (TILE_H / 2); // ajuste al centro del diamante
-
+  const relY = sy - ORIGIN_Y - (TILE_H / 2);
   const gx = (relX / (TILE_W / 2) + relY / (TILE_H / 2)) / 2;
   const gy = (relY / (TILE_H / 2) - relX / (TILE_W / 2)) / 2;
-
   return { x: Math.round(gx), y: Math.round(gy) };
 }
 
@@ -264,11 +253,11 @@ function loadGame() {
     state.forgeBuffers = new Map();
     state.moving = [];
     state.swords = 0;
-  } catch (e) { console.warn('Save corrupt'); }
+  } catch (e) {}
 }
 
 let tickAccumulator = 0;
-const BASE_TICK = 700;
+const BASE_TICK = 650;
 
 function simulationTick(dt) {
   tickAccumulator += dt;
@@ -289,7 +278,7 @@ function simulationTick(dt) {
 
       state.hasActiveFlow = true;
 
-      if (Math.random() < 0.85 + state.prodLevel * 0.05) {
+      if (Math.random() < 0.9) {
         state.moving.push({
           type: node.type,
           path: path,
@@ -300,7 +289,7 @@ function simulationTick(dt) {
     }
   }
 
-  const moveSpeed = 1.0 + state.speedLevel * 0.4;
+  const moveSpeed = 1.2 + state.speedLevel * 0.5;
 
   for (let i = state.moving.length - 1; i >= 0; i--) {
     const item = state.moving[i];
@@ -317,12 +306,14 @@ function simulationTick(dt) {
         if (item.type === 'iron') buf.iron++;
         if (item.type === 'mana') buf.mana++;
 
-        if (buf.iron >= 2 && buf.mana >= 1) {
+        // Forja tan pronto como tenga materiales
+        while (buf.iron >= 2 && buf.mana >= 1) {
           buf.iron -= 2;
           buf.mana -= 1;
           state.swords++;
           state.swordsThisWave++;
         }
+
         state.moving.splice(i, 1);
       }
     }
@@ -390,10 +381,10 @@ function renderFactory() {
 
       if (node) {
         fCtx.fillStyle = '#fff';
-        fCtx.font = '11px Courier New';
+        fCtx.font = '12px Courier New';
         fCtx.textAlign = 'center';
         const label = node.type === 'iron' ? 'H' : node.type === 'mana' ? 'M' : node.type === 'forge' ? 'F' : '·';
-        fCtx.fillText(label, x, y + TILE_H / 2 + 4);
+        fCtx.fillText(label, x, y + TILE_H / 2 + 5);
       }
     }
   }
@@ -412,7 +403,7 @@ function renderFactory() {
     const color = item.type === 'iron' ? '#f0d080' : '#80d0f0';
     fCtx.fillStyle = color;
     fCtx.beginPath();
-    fCtx.arc(x, y + 14, 6, 0, Math.PI * 2);
+    fCtx.arc(x, y + 16, 7, 0, Math.PI * 2);
     fCtx.fill();
   }
 }
@@ -424,33 +415,33 @@ function renderBattle() {
   bCtx.fillStyle = '#1a1520';
   bCtx.fillRect(0, 0, w, h);
 
-  const pathY = h * 0.6;
-  const margin = 40;
+  const pathY = h * 0.55;
+  const margin = 30;
   bCtx.strokeStyle = '#7a6a5a';
-  bCtx.lineWidth = 20;
+  bCtx.lineWidth = 22;
   bCtx.lineCap = 'round';
   bCtx.beginPath();
   bCtx.moveTo(margin, pathY);
-  bCtx.lineTo(w - margin - 40, pathY);
+  bCtx.lineTo(w - margin - 30, pathY);
   bCtx.stroke();
 
-  const castleX = w - margin - 20;
+  const castleX = w - margin - 15;
   bCtx.fillStyle = '#3a2a1a';
-  bCtx.fillRect(castleX - 20, pathY - 55, 50, 110);
+  bCtx.fillRect(castleX - 25, pathY - 60, 55, 120);
   bCtx.fillStyle = '#2a1a0a';
-  bCtx.fillRect(castleX - 15, pathY - 35, 40, 70);
+  bCtx.fillRect(castleX - 20, pathY - 40, 45, 80);
   bCtx.fillStyle = '#d4a574';
   bCtx.font = 'bold 13px Courier New';
   bCtx.textAlign = 'center';
-  bCtx.fillText('CASTILLO', castleX + 5, pathY + 70);
+  bCtx.fillText('CASTILLO', castleX + 2, pathY + 75);
 
   const progress = Math.max(0, 1 - (state.enemyHp / state.enemyMaxHp));
-  const ex = margin + 20 + progress * (w - margin * 2 - 80);
+  const ex = margin + 30 + progress * (w - margin * 2 - 100);
   const ey = pathY;
 
   bCtx.fillStyle = '#d04040';
   bCtx.beginPath();
-  bCtx.arc(ex, ey, 24, 0, Math.PI * 2);
+  bCtx.arc(ex, ey, 26, 0, Math.PI * 2);
   bCtx.fill();
   bCtx.strokeStyle = '#900000';
   bCtx.lineWidth = 3;
@@ -458,38 +449,38 @@ function renderBattle() {
 
   bCtx.fillStyle = '#fff';
   bCtx.beginPath();
-  bCtx.arc(ex - 7, ey - 5, 3.5, 0, Math.PI * 2);
-  bCtx.arc(ex + 7, ey - 5, 3.5, 0, Math.PI * 2);
+  bCtx.arc(ex - 8, ey - 6, 4, 0, Math.PI * 2);
+  bCtx.arc(ex + 8, ey - 6, 4, 0, Math.PI * 2);
   bCtx.fill();
   bCtx.fillStyle = '#000';
   bCtx.beginPath();
-  bCtx.arc(ex - 7, ey - 5, 1.8, 0, Math.PI * 2);
-  bCtx.arc(ex + 7, ey - 5, 1.8, 0, Math.PI * 2);
+  bCtx.arc(ex - 8, ey - 6, 2, 0, Math.PI * 2);
+  bCtx.arc(ex + 8, ey - 6, 2, 0, Math.PI * 2);
   bCtx.fill();
 
   bCtx.fillStyle = '#fff';
-  bCtx.font = 'bold 11px Courier New';
+  bCtx.font = 'bold 12px Courier New';
   bCtx.textAlign = 'center';
-  bCtx.fillText('ENEMIGO', ex, ey + 40);
+  bCtx.fillText('ENEMIGO', ex, ey + 42);
 
-  const barW = 130;
+  const barW = 140;
   const barX = ex - barW / 2;
-  const barY = ey - 48;
+  const barY = ey - 50;
   bCtx.fillStyle = '#222';
-  bCtx.fillRect(barX, barY, barW, 10);
+  bCtx.fillRect(barX, barY, barW, 12);
   bCtx.fillStyle = '#e04040';
   const hpRatio = Math.max(0, state.enemyHp / state.enemyMaxHp);
-  bCtx.fillRect(barX, barY, barW * hpRatio, 10);
+  bCtx.fillRect(barX, barY, barW * hpRatio, 12);
   bCtx.strokeStyle = '#666';
   bCtx.lineWidth = 1;
-  bCtx.strokeRect(barX, barY, barW, 10);
+  bCtx.strokeRect(barX, barY, barW, 12);
 
   bCtx.fillStyle = '#e0d8c8';
   bCtx.font = 'bold 15px Courier New';
   bCtx.textAlign = 'left';
-  bCtx.fillText(`Oleada ${state.wave}`, 16, 26);
+  bCtx.fillText(`Oleada ${state.wave}`, 14, 24);
   bCtx.font = '12px Courier New';
-  bCtx.fillText(`HP: ${Math.max(0, state.enemyHp)} / ${state.enemyMaxHp}`, 16, 44);
+  bCtx.fillText(`HP: ${Math.max(0, state.enemyHp)} / ${state.enemyMaxHp}`, 14, 42);
 }
 
 let lastTime = performance.now();
