@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Forge & Fend: Fantasy Tycoon</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -11,12 +11,14 @@
     color: #e0d8c8;
     font-family: 'Courier New', monospace;
     overflow: hidden;
+    height: 100vh;
+    height: 100dvh;
   }
   .container {
     display: flex;
     flex-direction: column;
-    height: 100vh;
-    width: 100vw;
+    height: 100%;
+    width: 100%;
   }
   @media (min-width: 1000px) {
     .container { flex-direction: row; }
@@ -27,47 +29,71 @@
     display: block;
     background: #1a1520;
     width: 100%;
+    touch-action: none;
   }
-  #factoryCanvas { flex: 1.3; min-height: 55vh; }
-  #battleCanvas  { flex: 0.9; min-height: 32vh; border-top: 2px solid #3a2a1a; }
+  #factoryCanvas { flex: 1.4; min-height: 45vh; }
+  #battleCanvas  { flex: 0.7; min-height: 22vh; border-top: 2px solid #3a2a1a; }
+
   .ui {
     position: absolute;
     top: 8px;
     left: 8px;
     background: rgba(10, 8, 6, 0.95);
     border: 1px solid #5a4a3a;
-    padding: 12px 16px;
+    padding: 10px 12px;
     border-radius: 6px;
-    min-width: 250px;
-    font-size: 13px;
-    line-height: 1.5;
-    z-index: 10;
-    max-height: 92vh;
+    min-width: 200px;
+    max-width: 280px;
+    font-size: 12px;
+    line-height: 1.45;
+    z-index: 20;
+    max-height: 85vh;
     overflow-y: auto;
+    transition: transform 0.25s ease;
   }
-  .ui h2 { font-size: 16px; color: #d4a574; margin-bottom: 8px; }
+  .ui.collapsed {
+    transform: translateX(-120%);
+  }
+  .ui h2 { font-size: 15px; color: #d4a574; margin-bottom: 6px; }
   .resource { display: flex; justify-content: space-between; }
-  .section { margin-top: 10px; border-top: 1px solid #3a2a1a; padding-top: 8px; }
-  .section-title { color: #c09060; font-size: 12px; margin-bottom: 4px; }
-  .buttons { margin-top: 6px; display: flex; flex-direction: column; gap: 4px; }
+  .section { margin-top: 8px; border-top: 1px solid #3a2a1a; padding-top: 6px; }
+  .section-title { color: #c09060; font-size: 11px; margin-bottom: 3px; }
+  .buttons { margin-top: 5px; display: flex; flex-direction: column; gap: 3px; }
   button {
     background: #2a2218;
     color: #e0d8c8;
     border: 1px solid #5a4a3a;
-    padding: 5px 8px;
+    padding: 6px 8px;
     cursor: pointer;
     font-family: inherit;
     font-size: 12px;
+    border-radius: 4px;
   }
-  button:hover { background: #3a3228; }
+  button:hover, button:active { background: #3a3228; }
   button.active { background: #5a4a2a; border-color: #d4a574; }
-  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  button:disabled { opacity: 0.5; }
   .wave-info { color: #c07050; font-weight: bold; }
-  .hint { font-size: 11px; color: #a09070; margin-top: 6px; }
-  .status { font-size: 12px; margin-top: 4px; color: #80c080; }
+  .hint { font-size: 10px; color: #a09070; margin-top: 4px; }
+  .status { font-size: 11px; margin-top: 3px; color: #80c080; }
   .status.bad { color: #c07050; }
-  .selected { color: #d4a574; font-weight: bold; }
-  .upgrade-btn { font-size: 11px; padding: 4px 6px; }
+  .selected { color: #d4a574; font-weight: bold; font-size: 12px; }
+  .upgrade-btn { font-size: 11px; padding: 5px 6px; }
+
+  .toggle-ui {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 30;
+    background: #2a2218;
+    color: #e0d8c8;
+    border: 1px solid #5a4a3a;
+    padding: 8px 12px;
+    font-family: inherit;
+    font-size: 13px;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .toggle-ui:active { background: #3a3228; }
 </style>
 </head>
 <body>
@@ -76,7 +102,9 @@
   <canvas id="battleCanvas"></canvas>
 </div>
 
-<div class="ui">
+<button class="toggle-ui" id="toggleUi">Menú</button>
+
+<div class="ui" id="uiPanel">
   <h2>Forge & Fend</h2>
   <div class="resource"><span>Oro</span><span id="gold">100</span></div>
   <div class="resource"><span>Espadas listas</span><span id="swords">0</span></div>
@@ -120,7 +148,7 @@
       <button onclick="selectPlace(null)">Cancelar</button>
     </div>
   </div>
-  <div class="hint">Selecciona y haz clic en la rejilla.</div>
+  <div class="hint">Selecciona y toca la rejilla.</div>
   <div class="hint" id="saveStatus">Guardado automático activo</div>
 </div>
 
@@ -144,11 +172,11 @@ const state = {
   hasActiveFlow: false,
 };
 
-const TILE_W = 92;
-const TILE_H = 46;
+const TILE_W = 72;
+const TILE_H = 36;
 const GRID = 8;
 let ORIGIN_X = 300;
-let ORIGIN_Y = 60;
+let ORIGIN_Y = 50;
 const DIRS = [[0,1],[1,0],[0,-1],[-1,0]];
 
 function updateOrigin() {
@@ -156,7 +184,7 @@ function updateOrigin() {
   const h = factoryCanvas.height;
   const gridPixelH = GRID * (TILE_H / 2);
   ORIGIN_X = w / 2;
-  ORIGIN_Y = Math.max(40, (h - gridPixelH) / 2 - 10);
+  ORIGIN_Y = Math.max(30, (h - gridPixelH) / 2 - 5);
 }
 
 function gridToScreen(gx, gy) {
@@ -306,7 +334,6 @@ function simulationTick(dt) {
         if (item.type === 'iron') buf.iron++;
         if (item.type === 'mana') buf.mana++;
 
-        // Forja tan pronto como tenga materiales
         while (buf.iron >= 2 && buf.mana >= 1) {
           buf.iron -= 2;
           buf.mana -= 1;
@@ -340,6 +367,8 @@ const factoryCanvas = document.getElementById('factoryCanvas');
 const battleCanvas  = document.getElementById('battleCanvas');
 const fCtx = factoryCanvas.getContext('2d');
 const bCtx = battleCanvas.getContext('2d');
+const uiPanel = document.getElementById('uiPanel');
+const toggleBtn = document.getElementById('toggleUi');
 
 function resizeCanvases() {
   factoryCanvas.width  = factoryCanvas.clientWidth;
@@ -381,10 +410,10 @@ function renderFactory() {
 
       if (node) {
         fCtx.fillStyle = '#fff';
-        fCtx.font = '12px Courier New';
+        fCtx.font = '11px Courier New';
         fCtx.textAlign = 'center';
         const label = node.type === 'iron' ? 'H' : node.type === 'mana' ? 'M' : node.type === 'forge' ? 'F' : '·';
-        fCtx.fillText(label, x, y + TILE_H / 2 + 5);
+        fCtx.fillText(label, x, y + TILE_H / 2 + 4);
       }
     }
   }
@@ -403,7 +432,7 @@ function renderFactory() {
     const color = item.type === 'iron' ? '#f0d080' : '#80d0f0';
     fCtx.fillStyle = color;
     fCtx.beginPath();
-    fCtx.arc(x, y + 16, 7, 0, Math.PI * 2);
+    fCtx.arc(x, y + 14, 6, 0, Math.PI * 2);
     fCtx.fill();
   }
 }
@@ -416,71 +445,71 @@ function renderBattle() {
   bCtx.fillRect(0, 0, w, h);
 
   const pathY = h * 0.55;
-  const margin = 30;
+  const margin = 20;
   bCtx.strokeStyle = '#7a6a5a';
-  bCtx.lineWidth = 22;
+  bCtx.lineWidth = 18;
   bCtx.lineCap = 'round';
   bCtx.beginPath();
   bCtx.moveTo(margin, pathY);
-  bCtx.lineTo(w - margin - 30, pathY);
+  bCtx.lineTo(w - margin - 20, pathY);
   bCtx.stroke();
 
-  const castleX = w - margin - 15;
+  const castleX = w - margin - 10;
   bCtx.fillStyle = '#3a2a1a';
-  bCtx.fillRect(castleX - 25, pathY - 60, 55, 120);
+  bCtx.fillRect(castleX - 20, pathY - 45, 45, 90);
   bCtx.fillStyle = '#2a1a0a';
-  bCtx.fillRect(castleX - 20, pathY - 40, 45, 80);
+  bCtx.fillRect(castleX - 15, pathY - 30, 35, 60);
   bCtx.fillStyle = '#d4a574';
-  bCtx.font = 'bold 13px Courier New';
+  bCtx.font = 'bold 11px Courier New';
   bCtx.textAlign = 'center';
-  bCtx.fillText('CASTILLO', castleX + 2, pathY + 75);
+  bCtx.fillText('CASTILLO', castleX + 2, pathY + 55);
 
   const progress = Math.max(0, 1 - (state.enemyHp / state.enemyMaxHp));
-  const ex = margin + 30 + progress * (w - margin * 2 - 100);
+  const ex = margin + 20 + progress * (w - margin * 2 - 70);
   const ey = pathY;
 
   bCtx.fillStyle = '#d04040';
   bCtx.beginPath();
-  bCtx.arc(ex, ey, 26, 0, Math.PI * 2);
+  bCtx.arc(ex, ey, 20, 0, Math.PI * 2);
   bCtx.fill();
   bCtx.strokeStyle = '#900000';
-  bCtx.lineWidth = 3;
+  bCtx.lineWidth = 2;
   bCtx.stroke();
 
   bCtx.fillStyle = '#fff';
   bCtx.beginPath();
-  bCtx.arc(ex - 8, ey - 6, 4, 0, Math.PI * 2);
-  bCtx.arc(ex + 8, ey - 6, 4, 0, Math.PI * 2);
+  bCtx.arc(ex - 6, ey - 4, 3, 0, Math.PI * 2);
+  bCtx.arc(ex + 6, ey - 4, 3, 0, Math.PI * 2);
   bCtx.fill();
   bCtx.fillStyle = '#000';
   bCtx.beginPath();
-  bCtx.arc(ex - 8, ey - 6, 2, 0, Math.PI * 2);
-  bCtx.arc(ex + 8, ey - 6, 2, 0, Math.PI * 2);
+  bCtx.arc(ex - 6, ey - 4, 1.5, 0, Math.PI * 2);
+  bCtx.arc(ex + 6, ey - 4, 1.5, 0, Math.PI * 2);
   bCtx.fill();
 
   bCtx.fillStyle = '#fff';
-  bCtx.font = 'bold 12px Courier New';
+  bCtx.font = 'bold 10px Courier New';
   bCtx.textAlign = 'center';
-  bCtx.fillText('ENEMIGO', ex, ey + 42);
+  bCtx.fillText('ENEMIGO', ex, ey + 32);
 
-  const barW = 140;
+  const barW = 110;
   const barX = ex - barW / 2;
-  const barY = ey - 50;
+  const barY = ey - 38;
   bCtx.fillStyle = '#222';
-  bCtx.fillRect(barX, barY, barW, 12);
+  bCtx.fillRect(barX, barY, barW, 8);
   bCtx.fillStyle = '#e04040';
   const hpRatio = Math.max(0, state.enemyHp / state.enemyMaxHp);
-  bCtx.fillRect(barX, barY, barW * hpRatio, 12);
+  bCtx.fillRect(barX, barY, barW * hpRatio, 8);
   bCtx.strokeStyle = '#666';
   bCtx.lineWidth = 1;
-  bCtx.strokeRect(barX, barY, barW, 12);
+  bCtx.strokeRect(barX, barY, barW, 8);
 
   bCtx.fillStyle = '#e0d8c8';
-  bCtx.font = 'bold 15px Courier New';
+  bCtx.font = 'bold 13px Courier New';
   bCtx.textAlign = 'left';
-  bCtx.fillText(`Oleada ${state.wave}`, 14, 24);
-  bCtx.font = '12px Courier New';
-  bCtx.fillText(`HP: ${Math.max(0, state.enemyHp)} / ${state.enemyMaxHp}`, 14, 42);
+  bCtx.fillText(`Oleada ${state.wave}`, 10, 20);
+  bCtx.font = '11px Courier New';
+  bCtx.fillText(`HP: ${Math.max(0, state.enemyHp)} / ${state.enemyMaxHp}`, 10, 36);
 }
 
 let lastTime = performance.now();
@@ -503,6 +532,11 @@ function selectPlace(type) {
   if (type === 'mana')  document.getElementById('btnMana').classList.add('active');
   if (type === 'forge') document.getElementById('btnForge').classList.add('active');
   if (type === 'path')  document.getElementById('btnPath').classList.add('active');
+
+  // En móvil, cerrar menú al seleccionar algo para ver la rejilla
+  if (window.innerWidth < 800 && type) {
+    uiPanel.classList.add('collapsed');
+  }
 }
 
 factoryCanvas.addEventListener('click', (e) => {
@@ -523,6 +557,10 @@ factoryCanvas.addEventListener('click', (e) => {
   state.grid[gy][gx] = { type: state.selectedPlace };
   saveGame();
   updateUI();
+});
+
+toggleBtn.addEventListener('click', () => {
+  uiPanel.classList.toggle('collapsed');
 });
 
 function updateUI() {
@@ -559,6 +597,11 @@ function updateUI() {
 loadGame();
 updateUI();
 setInterval(saveGame, 10000);
+
+// En móvil empezar con menú cerrado para ver el mapa
+if (window.innerWidth < 800) {
+  uiPanel.classList.add('collapsed');
+}
 </script>
 </body>
 </html>
