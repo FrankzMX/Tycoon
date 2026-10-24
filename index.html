@@ -159,6 +159,10 @@ function updateOrigin() {
   ORIGIN_Y = (h - gridPixelH) / 2 + 20;
 }
 
+/**
+ * Convierte coordenadas de rejilla a pantalla.
+ * El punto devuelto es la PUNTA SUPERIOR del rombo.
+ */
 function gridToScreen(gx, gy) {
   return {
     x: ORIGIN_X + (gx - gy) * (TILE_W / 2),
@@ -166,11 +170,18 @@ function gridToScreen(gx, gy) {
   };
 }
 
+/**
+ * Convierte posición de pantalla a rejilla.
+ * Compensa que el origen del rombo es su punta superior
+ * desplazando media altura para centrar el hit.
+ */
 function screenToGrid(sx, sy) {
   const relX = sx - ORIGIN_X;
-  const relY = sy - ORIGIN_Y;
+  const relY = sy - ORIGIN_Y - (TILE_H / 2); // ajuste al centro del diamante
+
   const gx = (relX / (TILE_W / 2) + relY / (TILE_H / 2)) / 2;
   const gy = (relY / (TILE_H / 2) - relX / (TILE_W / 2)) / 2;
+
   return { x: Math.round(gx), y: Math.round(gy) };
 }
 
@@ -278,7 +289,6 @@ function simulationTick(dt) {
 
       state.hasActiveFlow = true;
 
-      // Producción más consistente: siempre intenta si hay camino
       if (Math.random() < 0.85 + state.prodLevel * 0.05) {
         state.moving.push({
           type: node.type,
